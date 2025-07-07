@@ -9,6 +9,7 @@ import shutil
 import zipfile
 import io # Added for reading uploaded files in memory
 st.set_page_config(layout="wide", page_title="Question Tag Validator")
+
 # --- Constants ---
 S3_TOPIC_URL = "https://nxtwave-assessments-backend-nxtwave-media-static.s3.ap-south-1.amazonaws.com/topin_config_prod/static/static_content.json"
 REQUIRED_TAGS = {
@@ -20,6 +21,44 @@ REQUIRED_TAGS = {
 # Regex for a UUID (standard format) - compiled once
 UUID_REGEX = re.compile(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$')
 
+def format_tag_name(tag_input, prefix):
+    """
+    Formats a tag name by:
+    1. Adding the appropriate prefix (COURSE_, MODULE_, UNIT_)
+    2. Replacing spaces and special characters with underscores
+    3. Collapsing multiple underscores to single underscore
+    """
+    if not tag_input or not tag_input.strip():
+        return ""
+
+    tag_input = tag_input.strip()
+    
+    # Remove existing prefix if present
+    if tag_input.startswith(prefix):
+        tag_input = tag_input[len(prefix):]
+
+    # Replace spaces and special characters with underscores
+    formatted_tag = re.sub(r'[^a-zA-Z0-9_]', '_', tag_input)
+
+    # Collapse multiple underscores to single
+    formatted_tag = re.sub(r'_+', '_', formatted_tag)
+
+    # Remove leading/trailing underscores
+    formatted_tag = formatted_tag.strip('_')
+
+    # Add prefix
+    if formatted_tag:
+        return f"{prefix}{formatted_tag}"
+    else:
+        return ""
+
+# --- Initialize session state for formatted tags ---
+if 'formatted_course_tag' not in st.session_state:
+    st.session_state.formatted_course_tag = ""
+if 'formatted_module_tag' not in st.session_state:
+    st.session_state.formatted_module_tag = ""
+if 'formatted_unit_tag' not in st.session_state:
+    st.session_state.formatted_unit_tag = ""
 
 # --- Caching unit-subtopic map ---
 @st.cache_resource
@@ -47,6 +86,7 @@ def fetch_unit_subtopic_map():
     except Exception as e:
         st.error(f"An unexpected error occurred while fetching unit-subtopic mapping: {e}")
         return {}
+
 @st.cache_resource
 def fetch_topic_subtopic_tags_code_analysis():
     """
@@ -75,8 +115,6 @@ def fetch_topic_subtopic_tags_code_analysis():
     except Exception as e:
         st.error(f"Error fetching Code Analysis topic/subtopic tags: {e}")
         return set(), set()
-
-
 
 def is_valid_tag(tag_str, question_id=None):
     """
@@ -152,7 +190,6 @@ def extract_json_files(zip_file):
         shutil.rmtree(temp_dir)
     return all_questions
 
-
 def extract_mcq_data(uploaded_file):
     import io
     questions = []
@@ -190,8 +227,6 @@ def extract_mcq_data(uploaded_file):
                 "type": "MCQ"
             }
 
-            # current_question["tag_names"].add(question_id)
-
         # Add tag to the current question
         if current_question and pd.notna(row[12]):
             tag = str(row[12]).strip()
@@ -209,15 +244,8 @@ def extract_mcq_data(uploaded_file):
     st.success(f"Extracted {len(questions)} MCQ questions from 'Questions' sheet")
     return questions
 
-    """
-    Extracts MCQ questions and their tags from an uploaded Excel or CSV file.
-    Assumes:
-    - Question ID in column 'question_id' (or index 0 if headerless).
-    - 'MULTIPLE_CHOICE' in column 'question_type' (or index 1 if headerless) signifies a new question.
-    - Tags are in column 'tag_names' (or index 12 if headerless).
-    """
-
 topic_tags, sub_topic_tags = fetch_topic_subtopic_tags_code_analysis()
+
 def fetch_and_parse_json_from_url():
     """
     Fetches raw JSON from the defined URL.
@@ -254,30 +282,25 @@ def get_processed_data(raw_data):
         
         section_items = question_tags_data.get(section_key, [])
         if not isinstance(section_items, list):
-            # print(f"Warning: Expected list for section '{section_key}', got {type(section_items)}. Skipping.")
             continue
 
         for section_data_item in section_items:
             if not isinstance(section_data_item, dict):
-                # print(f"Warning: Expected dict for item in section '{section_key}', got {type(section_data_item)}. Skipping.")
                 continue
 
             topic_name_data = section_data_item.get('topic_name', {})
             topic_value = topic_name_data.get('value')
 
             if not topic_value: # Skip if topic_value is missing or empty
-                # print(f"Warning: Missing topic_name value in section '{section_key}'. Item: {section_data_item}")
                 continue
             
             subtopics_values = []
             sub_topics_list = section_data_item.get('sub_topics', [])
             if not isinstance(sub_topics_list, list):
-                # print(f"Warning: Expected list for sub_topics in topic '{topic_value}', got {type(sub_topics_list)}. Skipping.")
                 continue
 
             for subtopic_data_item in sub_topics_list:
                 if not isinstance(subtopic_data_item, dict):
-                    # print(f"Warning: Expected dict for subtopic item in topic '{topic_value}', got {type(subtopic_data_item)}. Skipping.")
                     continue
                 
                 sub_topic_name_data = subtopic_data_item.get('sub_topic_name', {})
@@ -286,8 +309,6 @@ def get_processed_data(raw_data):
                     subtopics_values.append(subtopic_value)
             
             # Store sorted list of subtopic values for the current topic
-            # Only add topic if it has subtopics or if you want to show topics without subtopics
-            # Ensure topic is added even if subtopics_values is empty, if the topic itself is valid
             updated_data[section_key][topic_value] = sorted(subtopics_values)
             
     return updated_data
@@ -356,12 +377,9 @@ def validate_question_tags(question, module_type, unit_tag, course_tag, module_t
             if tag.startswith("SUB_TOPIC_") and tag not in valid_sub_topic_tags_MCQS:
                 missing.append(f"Invalid SUB_TOPIC tag: {tag}")
 
-
     return qid, missing
 
 # --- Streamlit UI ---
-
-
 st.title("📦 Question Tag Validator App")
 st.markdown("Upload your question files (Excel for MCQs, ZIP for JSONs) to check for **EXACT** tag compliance.")
 st.markdown("---")
@@ -375,13 +393,47 @@ st.session_state.debug_mode = st.checkbox("🔍 Debug Mode (show detailed proces
 st.markdown("---")
 
 st.header("1. Enter Required Tags")
+st.markdown("*Enter the tag names below and press Enter to auto-format them with proper prefixes and formatting.*")
+
 col1, col2, col3 = st.columns(3)
 with col1:
-    course_input = st.text_input("COURSE tag (e.g., COURSE_PYTHON)", key="course", help="Enter the exact COURSE tag expected in your questions.").strip()
+    course_input = st.text_input(
+        "Course Name", 
+        key="course_raw", 
+        help="Enter the course name (e.g., 'Python', 'React JS'). Will be formatted as COURSE_Python, COURSE_React_JS",
+        placeholder="e.g., Python"
+    )
+    if course_input:
+        formatted_course = format_tag_name(course_input, "COURSE_")
+        st.session_state.formatted_course_tag = formatted_course
+        if formatted_course:
+            st.success(f"✅ Formatted: **{formatted_course}**")
+
 with col2:
-    module_input = st.text_input("MODULE tag (e.g., MODULE_LOOPING)", key="module", help="Enter the exact MODULE tag expected in your questions.").strip()
+    module_input = st.text_input(
+        "Module Name", 
+        key="module_raw", 
+        help="Enter the module name (e.g., 'Looping', 'State Management'). Will be formatted as MODULE_LOOPING, MODULE_STATE_MANAGEMENT",
+        placeholder="e.g., Looping"
+    )
+    if module_input:
+        formatted_module = format_tag_name(module_input, "MODULE_")
+        st.session_state.formatted_module_tag = formatted_module
+        if formatted_module:
+            st.success(f"✅ Formatted: **{formatted_module}**")
+
 with col3:
-    unit_input = st.text_input("UNIT tag (e.g., UNIT_NESTED_CONDITIONS)", key="unit", help="Enter the exact UNIT tag expected in your questions.").strip()
+    unit_input = st.text_input(
+        "Unit Name", 
+        key="unit_raw", 
+        help="Enter the unit name (e.g., 'Nested Conditions', 'API Integration'). Will be formatted as UNIT_NESTED_CONDITIONS, UNIT_API_INTEGRATION",
+        placeholder="e.g., Nested Conditions"
+    )
+    if unit_input:
+        formatted_unit = format_tag_name(unit_input, "UNIT_")
+        st.session_state.formatted_unit_tag = formatted_unit
+        if formatted_unit:
+            st.success(f"✅ Formatted: **{formatted_unit}**")
 
 st.markdown("---")
 st.header("2. Upload Question Files")
@@ -391,17 +443,23 @@ st.markdown("---")
 
 st.header("3. Run Validation")
 if st.button("🚀 Run Tag Check", type="primary"):
-    if not (course_input and module_input and unit_input):
-        st.warning("Please provide COURSE, MODULE, and UNIT tags in Section 1.")
+    if not (st.session_state.formatted_course_tag and st.session_state.formatted_module_tag and st.session_state.formatted_unit_tag):
+        st.warning("Please provide Course, Module, and Unit names in Section 1 and ensure they are properly formatted.")
     elif not (mcq_file or json_zip_file):
         st.warning("Please upload at least one file in Section 2: an MCQ sheet or a JSON ZIP.")
     else:
         with st.spinner("Fetching unit-subtopic mapping and processing files... This might take a moment."):
+            # Use the formatted tags for validation
+            course_tag = st.session_state.formatted_course_tag
+            module_tag = st.session_state.formatted_module_tag
+            unit_tag = st.session_state.formatted_unit_tag
+            
+            # Display the tags being used for validation
+            st.info(f"Using tags: **{course_tag}**, **{module_tag}**, **{unit_tag}**")
+            
             # unit_map is still fetched, but its subtopic data is not used for validation, only for the unit_tag check itself.
             unit_map = fetch_unit_subtopic_map() 
-            # If fetch_unit_subtopic_map encountered a severe error, it would have shown st.error and returned {}.
-            # We continue anyway as per the updated requirement not to stop.
-
+            
             all_questions = []
             validation_details = []
 
@@ -411,7 +469,7 @@ if st.button("🚀 Run Tag Check", type="primary"):
                 st.info(f"Found {len(mcqs)} MCQ questions. Now validating tags...")
                 
                 for q in mcqs:
-                    qid, missing = validate_question_tags(q,"MCQ" ,unit_input, course_input, module_input)
+                    qid, missing = validate_question_tags(q, "MCQ", unit_tag, course_tag, module_tag)
                     
                     validation_details.append({
                         "question_id": qid,
@@ -448,7 +506,7 @@ if st.button("🚀 Run Tag Check", type="primary"):
                             # Default to Python Coding if format is unclear but type is CODING
                             module_type = "Python Coding" 
                     
-                    qid, missing = validate_question_tags(q, module_type, unit_input, course_input, module_input)
+                    qid, missing = validate_question_tags(q, module_type, unit_tag, course_tag, module_tag)
                     
                     validation_details.append({
                         "question_id": qid,
@@ -490,7 +548,6 @@ if st.button("🚀 Run Tag Check", type="primary"):
             elif not [d for d in validation_details if d['has_issues']]: # If no issues at all
                 st.info("No detailed issues to display (all questions are valid).")
 
-
         # Display final results table and summary
         if all_questions:
             result_df = pd.DataFrame(all_questions)
@@ -528,6 +585,17 @@ st.markdown("---")
 # Add sample format information
 with st.expander("📋 Expected File Formats & Required Tags"):
     st.markdown("""
+    **Tag Formatting Rules:**
+    - Course/Module/Unit names are automatically formatted with proper prefixes
+    - All text is converted to uppercase
+    - Spaces and special characters are replaced with underscores
+    - Multiple consecutive underscores are collapsed to single underscores
+    - Examples:
+        - Input: "Python" → Output: "COURSE_PYTHON"
+        - Input: "React JS" → Output: "COURSE_REACT_JS"
+        - Input: "State Management" → Output: "MODULE_STATE_MANAGEMENT"
+        - Input: "Nested Conditions" → Output: "UNIT_NESTED_CONDITIONS"
+    
     **Expected Excel/CSV Format for MCQ Questions:**
     - The file should contain a row for each question, typically with the `question_id` in the **first column (Column A)** and `MULTIPLE_CHOICE` in the **second column (Column B)**.
     - Tags associated with a question should be present in the **thirteenth column (Column M, index 12)**.
