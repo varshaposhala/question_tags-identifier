@@ -25,7 +25,7 @@ UUID_REGEX = re.compile(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89
 def format_tag_name(tag_input, prefix):
     if not tag_input or not tag_input.strip():
         return ""
-    tag_input = tag_input.strip().upper()
+    tag_input = tag_input.strip()
     if tag_input.startswith(prefix):
         tag_input = tag_input[len(prefix):]
     formatted_tag = re.sub(r'[^a-zA-Z0-9_]', '_', tag_input)
