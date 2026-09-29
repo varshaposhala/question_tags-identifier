@@ -248,20 +248,36 @@ with st.container(border=True):
     with col1:
         course_input = st.text_input("Course Name", key="course_raw", placeholder="e.g., Python")
         st.session_state.formatted_course_tag = format_tag_name(course_input, "COURSE_")
-        if st.session_state.formatted_course_tag: st.success(f"Checks for: `{st.session_state.formatted_course_tag}`")
+        if st.session_state.formatted_course_tag:
+            tag = st.session_state.formatted_course_tag
+            st.success("Checks for:")
+            st.code(tag, language=None)
         unit_input = st.text_input("Unit Name", key="unit_raw", placeholder="e.g., Nested Conditions")
         st.session_state.formatted_unit_tag = format_tag_name(unit_input, "UNIT_")
-        if st.session_state.formatted_unit_tag: st.success(f"Checks for: `{st.session_state.formatted_unit_tag}`")
+        if st.session_state.formatted_unit_tag:
+            tag = st.session_state.formatted_unit_tag
+            st.success("Checks for:")
+            st.code(tag, language=None)
     with col2:
         module_input = st.text_input("Module Name", key="module_raw", placeholder="e.g., Looping")
         st.session_state.formatted_module_tag = format_tag_name(module_input, "MODULE_")
-        if st.session_state.formatted_module_tag: st.success(f"Checks for: `{st.session_state.formatted_module_tag}`")
+        if st.session_state.formatted_module_tag:
+            tag = st.session_state.formatted_module_tag
+            st.success("Checks for:")
+            st.code(tag, language=None)
         extra_unit_input = st.text_input("Additional Unit Name", key="extra_unit_raw", placeholder="e.g., Loops")
         st.session_state.extra_unit_tag = format_tag_name(extra_unit_input, "UNIT_")
-        if st.session_state.extra_unit_tag: st.success(f"Checks for: `{st.session_state.extra_unit_tag}`")
+        if st.session_state.extra_unit_tag:
+            tag = st.session_state.extra_unit_tag
+            st.success("Checks for:")
+            st.code(tag, language=None)
     company_input = st.text_input("Company Name", key="company_raw", placeholder="e.g., TCS")
     st.session_state.formatted_company_tag = format_tag_name(company_input, "COMPANY_")
-    if st.session_state.formatted_company_tag: st.success(f"Checks for: `{st.session_state.formatted_company_tag}`")
+    if st.session_state.formatted_company_tag:
+        tag = st.session_state.formatted_company_tag
+        st.success("Checks for:")
+        st.code(tag, language=None)
+
 
     st.markdown("---")
     st.subheader("Question & Set Tag Configuration")
